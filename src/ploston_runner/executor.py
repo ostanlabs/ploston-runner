@@ -16,6 +16,8 @@ from ploston_core.template import TemplateEngine
 from ploston_core.types import ExecutionStatus
 from ploston_core.workflow import WorkflowRegistry, WorkflowDefinition
 
+from .proxy import ProxyToolInvoker
+
 if TYPE_CHECKING:
     from .availability import AvailabilityReporter
     from .proxy import ToolProxy
@@ -93,14 +95,21 @@ class WorkflowExecutor:
         # Create sandbox factory for tool invoker
         sandbox_factory = SandboxFactory()
 
-        # Create tool invoker with all required dependencies
-        self._tool_invoker = ToolInvoker(
+        # Create base tool invoker with all required dependencies
+        base_tool_invoker = ToolInvoker(
             tool_registry=self._tool_registry,
             mcp_manager=actual_mcp_manager,
             sandbox_factory=sandbox_factory,
         )
 
-        # Create workflow engine
+        # Wrap with ProxyToolInvoker for hybrid workflow support
+        # This allows the runner to proxy unavailable tools to CP
+        self._tool_invoker = ProxyToolInvoker(
+            local_invoker=base_tool_invoker,
+            tool_proxy=self._tool_proxy,
+        )
+
+        # Create workflow engine with proxy-enabled invoker
         from ploston_core.config.models import ExecutionConfig
         execution_config = ExecutionConfig()
 
