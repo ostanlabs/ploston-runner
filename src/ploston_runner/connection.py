@@ -115,14 +115,16 @@ class RunnerConnection:
                 additional_headers={"Authorization": f"Bearer {self._config.auth_token}"},
             )
             
+            # Start receive loop BEFORE authentication so we can receive the auth response
+            self._receive_task = asyncio.create_task(self._receive_loop())
+            
             # Perform authentication handshake
             await self._authenticate()
             
             self._status = RunnerConnectionStatus.CONNECTED
             self._reconnect_delay = self._config.reconnect_delay  # Reset delay on success
             
-            # Start background tasks
-            self._receive_task = asyncio.create_task(self._receive_loop())
+            # Start heartbeat task after successful authentication
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
             
             logger.info(f"Connected to Control Plane as '{self._config.runner_name}'")
