@@ -36,7 +36,7 @@ MessageHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any] | None]]
 
 class RunnerConnection:
     """WebSocket connection to Control Plane.
-    
+
     Manages the persistent WebSocket connection, handles authentication,
     message routing, and automatic reconnection.
     """
@@ -49,7 +49,7 @@ class RunnerConnection:
         on_tool_call: MessageHandler | None = None,
     ):
         """Initialize runner connection.
-        
+
         Args:
             config: Runner configuration with CP URL and auth token
             on_config_push: Handler for config/push messages
@@ -65,7 +65,7 @@ class RunnerConnection:
         self._should_run = False
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._receive_task: asyncio.Task[None] | None = None
-        
+
         # Message handlers
         self._handlers: dict[str, MessageHandler] = {}
         if on_config_push:
@@ -92,12 +92,12 @@ class RunnerConnection:
 
     async def connect(self) -> None:
         """Establish connection to Control Plane.
-        
+
         Performs:
         1. WebSocket connection
         2. Authentication handshake (runner/register)
         3. Starts heartbeat and receive loops
-        
+
         Raises:
             ConnectionError: If connection or auth fails
         """
@@ -114,21 +114,21 @@ class RunnerConnection:
                 self._config.control_plane_url,
                 additional_headers={"Authorization": f"Bearer {self._config.auth_token}"},
             )
-            
+
             # Start receive loop BEFORE authentication so we can receive the auth response
             self._receive_task = asyncio.create_task(self._receive_loop())
-            
+
             # Perform authentication handshake
             await self._authenticate()
-            
+
             self._status = RunnerConnectionStatus.CONNECTED
             self._reconnect_delay = self._config.reconnect_delay  # Reset delay on success
-            
+
             # Start heartbeat task after successful authentication
             self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-            
+
             logger.info(f"Connected to Control Plane as '{self._config.runner_name}'")
-            
+
         except Exception as e:
             self._status = RunnerConnectionStatus.DISCONNECTED
             logger.error(f"Connection failed: {e}")
@@ -143,17 +143,17 @@ class RunnerConnection:
                 "name": self._config.runner_name,
             },
         )
-        
+
         if response.get("error"):
             error = response["error"]
             raise ConnectionError(f"Authentication failed: {error.get('message', 'Unknown error')}")
-        
+
         logger.debug("Authentication successful")
 
     async def disconnect(self) -> None:
         """Disconnect from Control Plane."""
         self._should_run = False
-        
+
         # Cancel background tasks
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
@@ -162,7 +162,7 @@ class RunnerConnection:
             except asyncio.CancelledError:
                 pass
             self._heartbeat_task = None
-            
+
         if self._receive_task:
             self._receive_task.cancel()
             try:
@@ -170,12 +170,12 @@ class RunnerConnection:
             except asyncio.CancelledError:
                 pass
             self._receive_task = None
-        
+
         # Close WebSocket
         if self._ws:
             await self._ws.close()
             self._ws = None
-        
+
         self._status = RunnerConnectionStatus.DISCONNECTED
         logger.info("Disconnected from Control Plane")
 
@@ -186,45 +186,45 @@ class RunnerConnection:
         timeout: float = 30.0,
     ) -> dict[str, Any]:
         """Send JSON-RPC request and wait for response.
-        
+
         Args:
             method: JSON-RPC method name
             params: Method parameters
             timeout: Response timeout in seconds
-            
+
         Returns:
             Response dict with result or error
-            
+
         Raises:
             ConnectionError: If not connected
             TimeoutError: If response times out
         """
         if not self._ws:
             raise ConnectionError("Not connected to Control Plane")
-        
+
         request_id = self._next_request_id()
         request = JSONRPCRequest(
             id=request_id,
             method=method,
             params=params or {},
         )
-        
+
         # Create future for response
         future: asyncio.Future[dict[str, Any]] = asyncio.Future()
         self._pending_requests[request_id] = future
-        
+
         try:
             await self._ws.send(request.model_dump_json())
             logger.debug(f"Sent request: {method} (id={request_id})")
-            
+
             # Wait for response with timeout
             response = await asyncio.wait_for(future, timeout=timeout)
             return response
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             self._pending_requests.pop(request_id, None)
             raise TimeoutError(f"Request {method} timed out after {timeout}s")
-        except Exception as e:
+        except Exception:
             self._pending_requests.pop(request_id, None)
             raise
 
@@ -234,22 +234,22 @@ class RunnerConnection:
         params: dict[str, Any] | None = None,
     ) -> None:
         """Send JSON-RPC notification (no response expected).
-        
+
         Args:
             method: JSON-RPC method name
             params: Method parameters
-            
+
         Raises:
             ConnectionError: If not connected
         """
         if not self._ws:
             raise ConnectionError("Not connected to Control Plane")
-        
+
         notification = JSONRPCNotification(
             method=method,
             params=params or {},
         )
-        
+
         await self._ws.send(notification.model_dump_json())
         logger.debug(f"Sent notification: {method}")
 
@@ -260,7 +260,7 @@ class RunnerConnection:
                 message_str = await self._ws.recv()
                 message = json.loads(message_str)
                 await self._handle_message(message)
-                
+
             except websockets.ConnectionClosed:
                 logger.warning("Connection closed by server")
                 await self._handle_disconnect()
@@ -278,18 +278,18 @@ class RunnerConnection:
             if not future.done():
                 future.set_result(message)
             return
-        
+
         # It's a request or notification from CP
         method = message.get("method")
         if not method:
             logger.warning(f"Received message without method: {message}")
             return
-        
+
         handler = self._handlers.get(method)
         if handler:
             try:
                 result = await handler(message.get("params", {}))
-                
+
                 # If it's a request (has id), send response
                 if "id" in message and result is not None:
                     response = JSONRPCResponse(
@@ -297,7 +297,7 @@ class RunnerConnection:
                         result=result,
                     )
                     await self._ws.send(response.model_dump_json())
-                    
+
             except Exception as e:
                 logger.error(f"Handler error for {method}: {e}")
                 if "id" in message:
@@ -329,13 +329,13 @@ class RunnerConnection:
         """Handle unexpected disconnection with reconnection logic."""
         if not self._should_run:
             return
-        
+
         self._status = RunnerConnectionStatus.RECONNECTING
-        
+
         while self._should_run:
             logger.info(f"Reconnecting in {self._reconnect_delay}s...")
             await asyncio.sleep(self._reconnect_delay)
-            
+
             try:
                 await self.connect()
                 return
@@ -350,7 +350,7 @@ class RunnerConnection:
     async def run(self) -> None:
         """Run the connection (connect and maintain)."""
         await self.connect()
-        
+
         # Wait for tasks to complete (they run until disconnect)
         if self._receive_task:
             await self._receive_task

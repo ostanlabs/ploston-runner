@@ -9,12 +9,12 @@ Handles:
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ploston_core.engine import WorkflowEngine, ExecutionResult
+from ploston_core.engine import ExecutionResult, WorkflowEngine
 from ploston_core.invoker import ToolInvoker
 from ploston_core.registry import ToolRegistry
 from ploston_core.template import TemplateEngine
 from ploston_core.types import ExecutionStatus
-from ploston_core.workflow import WorkflowRegistry, WorkflowDefinition
+from ploston_core.workflow import WorkflowDefinition, WorkflowRegistry
 
 from .proxy import ProxyToolInvoker
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class WorkflowExecutor:
     """Executes workflows on the runner using ploston-core components.
-    
+
     Receives workflow/execute messages from CP, executes using the
     WorkflowEngine, and returns results.
     """
@@ -38,7 +38,7 @@ class WorkflowExecutor:
         tool_proxy: "ToolProxy",
     ):
         """Initialize workflow executor.
-        
+
         Args:
             availability_reporter: For accessing MCP manager
             tool_proxy: For proxying unavailable tools to CP
@@ -111,6 +111,7 @@ class WorkflowExecutor:
 
         # Create workflow engine with proxy-enabled invoker
         from ploston_core.config.models import ExecutionConfig
+
         execution_config = ExecutionConfig()
 
         self._workflow_engine = WorkflowEngine(
@@ -124,32 +125,32 @@ class WorkflowExecutor:
 
     async def _register_mcp_tools(self, mcp_manager: Any) -> None:
         """Register tools from MCP manager into tool registry.
-        
+
         Args:
             mcp_manager: MCPClientManager instance
         """
         if not self._tool_registry:
             return
-        
+
         # Get all tools from MCP manager
         all_tools = mcp_manager.list_all_tools()
-        
+
         for tool in all_tools:
             self._tool_registry.register(tool)
-        
+
         logger.info(f"Registered {len(all_tools)} tools from MCP servers")
 
     async def handle_workflow_execute(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle workflow/execute message from Control Plane.
-        
+
         Args:
             params: Message params containing workflow definition and inputs
-            
+
         Returns:
             Response dict with execution result
         """
         logger.info("Received workflow execution request")
-        
+
         if not self._workflow_engine:
             return {
                 "status": "error",
@@ -158,13 +159,13 @@ class WorkflowExecutor:
                     "message": "Workflow executor not initialized",
                 },
             }
-        
+
         try:
             # Extract workflow definition and inputs
             workflow_dict = params.get("workflow")
             inputs = params.get("inputs", {})
             execution_id = params.get("execution_id")
-            
+
             if not workflow_dict:
                 return {
                     "status": "error",
@@ -173,22 +174,22 @@ class WorkflowExecutor:
                         "message": "Missing workflow definition",
                     },
                 }
-            
+
             # Parse workflow definition
             workflow = self._parse_workflow(workflow_dict)
-            
+
             # Register workflow temporarily
             self._workflow_registry.register(workflow)
-            
+
             # Execute workflow
             result = await self._workflow_engine.execute(
                 workflow_id=workflow.id,
                 inputs=inputs,
             )
-            
+
             # Convert result to dict
             return self._result_to_dict(result, execution_id)
-            
+
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             return {
@@ -222,11 +223,11 @@ class WorkflowExecutor:
         execution_id: str | None,
     ) -> dict[str, Any]:
         """Convert ExecutionResult to response dict.
-        
+
         Args:
             result: Workflow execution result
             execution_id: Original execution ID from CP
-            
+
         Returns:
             Response dict
         """
@@ -243,22 +244,24 @@ class WorkflowExecutor:
             "error": {
                 "code": result.error.code if result.error else None,
                 "message": str(result.error) if result.error else None,
-            } if result.error else None,
+            }
+            if result.error
+            else None,
         }
 
     async def handle_tool_call(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle tool/call message from Control Plane.
-        
+
         This is for when CP orchestrates and needs to call a tool on the runner.
-        
+
         Args:
             params: Message params containing tool name and arguments
-            
+
         Returns:
             Response dict with tool call result
         """
         logger.info("Received tool call request")
-        
+
         if not self._tool_invoker:
             return {
                 "status": "error",
@@ -267,11 +270,11 @@ class WorkflowExecutor:
                     "message": "Tool invoker not initialized",
                 },
             }
-        
+
         try:
             tool_name = params.get("tool")
             tool_args = params.get("args", {})
-            
+
             if not tool_name:
                 return {
                     "status": "error",
@@ -280,7 +283,7 @@ class WorkflowExecutor:
                         "message": "Missing tool name",
                     },
                 }
-            
+
             # Check if tool is available locally
             if not self._availability.is_tool_available(tool_name):
                 return {
@@ -290,18 +293,18 @@ class WorkflowExecutor:
                         "message": f"Tool '{tool_name}' is not available on this runner",
                     },
                 }
-            
+
             # Invoke tool
             result = await self._tool_invoker.invoke(
                 tool_name=tool_name,
                 params=tool_args,
             )
-            
+
             return {
                 "status": "success",
                 "result": result,
             }
-            
+
         except Exception as e:
             logger.error(f"Tool call failed: {e}")
             return {

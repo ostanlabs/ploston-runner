@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class ToolProxy:
     """Proxies tool calls to Control Plane for unavailable tools.
-    
+
     When a workflow running on the runner needs a tool that isn't
     available locally, this proxy forwards the call to CP.
     """
@@ -32,7 +32,7 @@ class ToolProxy:
         timeout: float = 60.0,
     ):
         """Initialize tool proxy.
-        
+
         Args:
             connection: Runner connection to CP
             availability_reporter: For checking tool availability
@@ -44,10 +44,10 @@ class ToolProxy:
 
     def is_tool_available_locally(self, tool_name: str) -> bool:
         """Check if a tool is available locally.
-        
+
         Args:
             tool_name: Name of the tool
-            
+
         Returns:
             True if tool is available locally
         """
@@ -60,24 +60,24 @@ class ToolProxy:
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Proxy a tool call to Control Plane.
-        
+
         Args:
             tool_name: Name of the tool to call
             args: Tool arguments
             timeout: Optional timeout override
-            
+
         Returns:
             Tool call result from CP
-            
+
         Raises:
             ConnectionError: If not connected to CP
             TimeoutError: If call times out
         """
         if not self._connection.is_connected:
             raise ConnectionError("Not connected to Control Plane")
-        
+
         logger.info(f"Proxying tool call '{tool_name}' to Control Plane")
-        
+
         try:
             response = await self._connection.send_request(
                 RunnerMethods.TOOL_PROXY,
@@ -87,7 +87,7 @@ class ToolProxy:
                 },
                 timeout=timeout or self._timeout,
             )
-            
+
             if response.get("error"):
                 error = response["error"]
                 logger.error(f"Proxied tool call failed: {error.get('message')}")
@@ -95,11 +95,11 @@ class ToolProxy:
                     "status": "error",
                     "error": error,
                 }
-            
+
             result = response.get("result", {})
             logger.debug(f"Proxied tool call '{tool_name}' completed")
             return result
-            
+
         except TimeoutError:
             logger.error(f"Proxied tool call '{tool_name}' timed out")
             raise
@@ -115,17 +115,17 @@ class ToolProxy:
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Invoke a tool, either locally or via proxy.
-        
+
         This is the main entry point for tool invocation during workflow
         execution. It checks if the tool is available locally and either
         invokes it directly or proxies to CP.
-        
+
         Args:
             tool_name: Name of the tool to call
             args: Tool arguments
             local_invoker: Optional local ToolInvoker for local calls
             timeout: Optional timeout
-            
+
         Returns:
             Tool call result
         """
@@ -136,14 +136,14 @@ class ToolProxy:
                 return await local_invoker.invoke(tool_name=tool_name, params=args)
             else:
                 logger.warning(f"Tool '{tool_name}' available but no local invoker")
-        
+
         # Proxy to CP
         return await self.proxy_tool_call(tool_name, args, timeout)
 
 
 class ProxyToolInvoker:
     """Tool invoker that supports proxying to CP.
-    
+
     Wraps the standard ToolInvoker to add proxy support for
     unavailable tools.
     """
@@ -154,7 +154,7 @@ class ProxyToolInvoker:
         tool_proxy: ToolProxy,
     ):
         """Initialize proxy tool invoker.
-        
+
         Args:
             local_invoker: Local ToolInvoker for available tools
             tool_proxy: ToolProxy for unavailable tools
@@ -171,14 +171,14 @@ class ProxyToolInvoker:
         timeout_seconds: float | None = None,
     ) -> Any:
         """Invoke a tool, proxying to CP if unavailable locally.
-        
+
         Args:
             tool_name: Name of the tool
             params: Tool parameters
             step_id: Optional step ID for logging
             execution_id: Optional execution ID for logging
             timeout_seconds: Optional timeout
-            
+
         Returns:
             Tool invocation result
         """

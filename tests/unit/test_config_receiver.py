@@ -1,10 +1,11 @@
 """Unit tests for ploston_runner.config_receiver module."""
 
 import os
-import pytest
 from unittest.mock import AsyncMock
 
-from ploston_runner.config_receiver import ConfigReceiver, ENV_VAR_PATTERN
+import pytest
+
+from ploston_runner.config_receiver import ENV_VAR_PATTERN, ConfigReceiver
 from ploston_runner.types import MCPConfig, RunnerMCPConfig
 
 
@@ -44,7 +45,7 @@ class TestConfigReceiver:
         """Test resolving simple env var."""
         receiver = ConfigReceiver()
         os.environ["TEST_VAR"] = "test_value"
-        
+
         try:
             result = receiver._resolve_env_vars("prefix_${TEST_VAR}_suffix")
             assert result == "prefix_test_value_suffix"
@@ -56,7 +57,7 @@ class TestConfigReceiver:
         receiver = ConfigReceiver()
         os.environ["VAR1"] = "one"
         os.environ["VAR2"] = "two"
-        
+
         try:
             result = receiver._resolve_env_vars("${VAR1} and ${VAR2}")
             assert result == "one and two"
@@ -91,9 +92,9 @@ class TestConfigReceiver:
             "args": ["-y", "@anthropic/mcp-server-filesystem"],
             "env": {"NODE_ENV": "production"},
         }
-        
+
         result = receiver._parse_mcp_config("filesystem", config_dict)
-        
+
         assert isinstance(result, MCPConfig)
         assert result.name == "filesystem"
         assert result.command == "npx"
@@ -107,9 +108,9 @@ class TestConfigReceiver:
         config_dict = {
             "url": "http://localhost:8080/mcp",
         }
-        
+
         result = receiver._parse_mcp_config("remote", config_dict)
-        
+
         assert result.name == "remote"
         assert result.url == "http://localhost:8080/mcp"
         assert result.command == ""
@@ -119,7 +120,7 @@ class TestConfigReceiver:
         """Test handling config push message."""
         callback = AsyncMock()
         receiver = ConfigReceiver(on_config_received=callback)
-        
+
         params = {
             "mcps": {
                 "filesystem": {
@@ -132,9 +133,9 @@ class TestConfigReceiver:
                 },
             }
         }
-        
+
         result = await receiver.handle_config_push(params)
-        
+
         assert result["status"] == "ok"
         assert result["mcps_received"] == 2
         assert receiver.current_config is not None
@@ -145,33 +146,37 @@ class TestConfigReceiver:
     async def test_handle_config_push_empty(self):
         """Test handling empty config push."""
         receiver = ConfigReceiver()
-        
+
         result = await receiver.handle_config_push({"mcps": {}})
-        
+
         assert result["status"] == "ok"
         assert result["mcps_received"] == 0
 
     def test_get_mcp_config(self):
         """Test getting specific MCP config."""
         receiver = ConfigReceiver()
-        receiver._current_config = RunnerMCPConfig(mcps={
-            "filesystem": MCPConfig(name="filesystem", command="npx"),
-        })
-        
+        receiver._current_config = RunnerMCPConfig(
+            mcps={
+                "filesystem": MCPConfig(name="filesystem", command="npx"),
+            }
+        )
+
         result = receiver.get_mcp_config("filesystem")
         assert result is not None
         assert result.name == "filesystem"
-        
+
         result = receiver.get_mcp_config("nonexistent")
         assert result is None
 
     def test_list_mcp_names(self):
         """Test listing MCP names."""
         receiver = ConfigReceiver()
-        receiver._current_config = RunnerMCPConfig(mcps={
-            "filesystem": MCPConfig(name="filesystem", command="npx"),
-            "docker": MCPConfig(name="docker", command="docker-mcp"),
-        })
-        
+        receiver._current_config = RunnerMCPConfig(
+            mcps={
+                "filesystem": MCPConfig(name="filesystem", command="npx"),
+                "docker": MCPConfig(name="docker", command="docker-mcp"),
+            }
+        )
+
         names = receiver.list_mcp_names()
         assert set(names) == {"filesystem", "docker"}

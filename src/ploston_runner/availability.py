@@ -8,8 +8,8 @@ Handles:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from ploston_core.config.models import MCPServerDefinition
 from ploston_core.mcp import MCPClientManager
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class AvailabilityReporter:
     """Monitors MCP availability and reports to Control Plane.
-    
+
     Tests MCPs on startup, performs periodic health checks,
     and reports availability changes to CP.
     """
@@ -36,7 +36,7 @@ class AvailabilityReporter:
         health_check_interval: float = 30.0,
     ):
         """Initialize availability reporter.
-        
+
         Args:
             connection: Runner connection to CP for reporting
             health_check_interval: Interval between health checks in seconds
@@ -61,16 +61,17 @@ class AvailabilityReporter:
     def unavailable_mcps(self) -> list[str]:
         """List of unavailable MCP names."""
         return [
-            name for name, avail in self._availability.items()
+            name
+            for name, avail in self._availability.items()
             if avail.status == MCPStatus.UNAVAILABLE
         ]
 
     def _mcp_config_to_server_def(self, config: MCPConfig) -> MCPServerDefinition:
         """Convert MCPConfig to MCPServerDefinition for ploston-core.
-        
+
         Args:
             config: MCP configuration from CP
-            
+
         Returns:
             MCPServerDefinition for MCPClientManager
         """
@@ -87,7 +88,7 @@ class AvailabilityReporter:
                 full_command = f"{config.command} {' '.join(config.args)}"
             else:
                 full_command = config.command
-            
+
             return MCPServerDefinition(
                 command=full_command,
                 env=config.env,
@@ -96,31 +97,31 @@ class AvailabilityReporter:
 
     async def initialize_mcps(self, config: RunnerMCPConfig) -> None:
         """Initialize MCPs from configuration and test availability.
-        
+
         Args:
             config: MCP configuration from CP
         """
         logger.info(f"Initializing {len(config.mcps)} MCPs")
-        
+
         # Convert configs to ploston-core format
         from ploston_core.config.models import ToolsConfig
-        
+
         mcp_servers = {
             name: self._mcp_config_to_server_def(mcp_config)
             for name, mcp_config in config.mcps.items()
         }
-        
+
         tools_config = ToolsConfig(mcp_servers=mcp_servers)
-        
+
         # Create MCP client manager
         self._mcp_manager = MCPClientManager(config=tools_config)
-        
+
         # Connect to all MCPs and test availability
         await self._test_all_mcps()
-        
+
         # Report initial availability to CP
         await self._report_availability()
-        
+
         # Start health check loop
         self._should_run = True
         self._health_check_task = asyncio.create_task(self._health_check_loop())
@@ -129,14 +130,14 @@ class AvailabilityReporter:
         """Test all configured MCPs and update availability."""
         if not self._mcp_manager:
             return
-        
+
         # Connect to all servers
         statuses = await self._mcp_manager.connect_all()
-        
+
         # Update availability based on connection status
         for name, status in statuses.items():
-            now = datetime.now(timezone.utc)
-            
+            now = datetime.now(UTC)
+
             if status.status == ConnectionStatus.CONNECTED:
                 tools = status.tools or []
                 self._availability[name] = MCPAvailability(
@@ -160,18 +161,19 @@ class AvailabilityReporter:
         if not self._connection.is_connected:
             logger.warning("Cannot report availability: not connected to CP")
             return
-        
+
         available = []
         unavailable = []
-        
+
         for name, avail in self._availability.items():
             if avail.status == MCPStatus.AVAILABLE:
                 available.extend(avail.tools)
             else:
                 unavailable.append(name)
-        
+
         try:
             from .types import RunnerMethods
+
             await self._connection.send_notification(
                 RunnerMethods.AVAILABILITY,
                 {
@@ -198,28 +200,28 @@ class AvailabilityReporter:
         """Perform health checks on all MCPs."""
         if not self._mcp_manager:
             return
-        
+
         # Get current status from manager
         statuses = self._mcp_manager.get_all_status()
-        
+
         availability_changed = False
-        now = datetime.now(timezone.utc)
-        
+        now = datetime.now(UTC)
+
         for name, status in statuses.items():
             old_avail = self._availability.get(name)
             old_status = old_avail.status if old_avail else MCPStatus.UNKNOWN
-            
+
             if status.status == ConnectionStatus.CONNECTED:
                 new_status = MCPStatus.AVAILABLE
                 tools = status.tools or []
             else:
                 new_status = MCPStatus.UNAVAILABLE
                 tools = []
-            
+
             if old_status != new_status:
                 availability_changed = True
                 logger.info(f"MCP '{name}' status changed: {old_status} -> {new_status}")
-            
+
             self._availability[name] = MCPAvailability(
                 name=name,
                 status=new_status,
@@ -227,7 +229,7 @@ class AvailabilityReporter:
                 error=status.error,
                 last_checked=now,
             )
-        
+
         # Report if availability changed
         if availability_changed:
             await self._report_availability()
@@ -235,7 +237,7 @@ class AvailabilityReporter:
     async def stop(self) -> None:
         """Stop health monitoring and disconnect MCPs."""
         self._should_run = False
-        
+
         if self._health_check_task:
             self._health_check_task.cancel()
             try:
@@ -243,16 +245,16 @@ class AvailabilityReporter:
             except asyncio.CancelledError:
                 pass
             self._health_check_task = None
-        
+
         if self._mcp_manager:
             await self._mcp_manager.disconnect_all()
             self._mcp_manager = None
-        
+
         logger.info("Availability reporter stopped")
 
     def get_mcp_manager(self) -> MCPClientManager | None:
         """Get the MCP client manager for tool invocation.
-        
+
         Returns:
             MCPClientManager if initialized, None otherwise
         """
@@ -260,10 +262,10 @@ class AvailabilityReporter:
 
     def is_tool_available(self, tool_name: str) -> bool:
         """Check if a tool is available.
-        
+
         Args:
             tool_name: Name of the tool
-            
+
         Returns:
             True if tool is available
         """

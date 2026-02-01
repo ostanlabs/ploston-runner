@@ -72,11 +72,7 @@ class MockControlPlane:
         except ImportError:
             raise ImportError("websockets package required: pip install websockets")
 
-        self._server = await websockets.serve(
-            self._handle_connection,
-            self.host,
-            self.port
-        )
+        self._server = await websockets.serve(self._handle_connection, self.host, self.port)
         logger.info(f"MockControlPlane started on ws://{self.host}:{self.port}")
 
     async def stop(self) -> None:
@@ -87,7 +83,7 @@ class MockControlPlane:
             self._server = None
             logger.info("MockControlPlane stopped")
 
-    async def __aenter__(self) -> "MockControlPlane":
+    async def __aenter__(self) -> MockControlPlane:
         """Async context manager entry."""
         await self.start()
         return self
@@ -125,11 +121,9 @@ class MockControlPlane:
             Request ID for tracking the response
         """
         request_id = len(self.workflows_to_send) + 100
-        self.workflows_to_send.append({
-            "id": request_id,
-            "workflow_id": workflow_id,
-            "inputs": inputs
-        })
+        self.workflows_to_send.append(
+            {"id": request_id, "workflow_id": workflow_id, "inputs": inputs}
+        )
         return request_id
 
     async def _handle_connection(self, ws: Any, path: str = "") -> None:
@@ -171,51 +165,51 @@ class MockControlPlane:
         params = msg["params"]
         msg_id = msg.get("id")
 
-        if (params.get("token") == self.expected_token and
-            params.get("name") == self.expected_name):
+        if params.get("token") == self.expected_token and params.get("name") == self.expected_name:
             # Success
-            await ws.send(json.dumps({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"status": "ok"}
-            }))
+            await ws.send(json.dumps({"jsonrpc": "2.0", "id": msg_id, "result": {"status": "ok"}}))
             self._registered = True
             logger.info(f"Runner '{params['name']}' registered successfully")
 
             # Push config if set
             if self.config_to_push:
-                await ws.send(json.dumps({
-                    "jsonrpc": "2.0",
-                    "method": "config/push",
-                    "params": self.config_to_push
-                }))
+                await ws.send(
+                    json.dumps(
+                        {"jsonrpc": "2.0", "method": "config/push", "params": self.config_to_push}
+                    )
+                )
                 logger.info("Pushed config to runner")
         else:
             # Failure
-            await ws.send(json.dumps({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "error": {"code": -32001, "message": "Invalid token or name"}
-            }))
+            await ws.send(
+                json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": msg_id,
+                        "error": {"code": -32001, "message": "Invalid token or name"},
+                    }
+                )
+            )
             logger.warning(f"Registration failed for '{params.get('name')}'")
 
     async def _handle_tool_proxy(self, ws: Any, msg: dict) -> None:
         """Handle tool/proxy request (mock response)."""
         msg_id = msg.get("id")
         params = msg.get("params", {})
-        
+
         # ToolProxy sends "tool" not "tool_name"
         tool_name = params.get("tool") or params.get("tool_name")
 
         # Return a mock success response
-        await ws.send(json.dumps({
-            "jsonrpc": "2.0",
-            "id": msg_id,
-            "result": {
-                "tool_name": tool_name,
-                "output": f"Mock result for {tool_name}"
-            }
-        }))
+        await ws.send(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {"tool_name": tool_name, "output": f"Mock result for {tool_name}"},
+                }
+            )
+        )
 
     async def send_workflow(self, workflow: dict) -> None:
         """Send workflow/execute to connected runner.
@@ -226,15 +220,19 @@ class MockControlPlane:
         if not self.runner_ws:
             raise RuntimeError("No runner connected")
 
-        await self.runner_ws.send(json.dumps({
-            "jsonrpc": "2.0",
-            "id": workflow["id"],
-            "method": "workflow/execute",
-            "params": {
-                "workflow_id": workflow["workflow_id"],
-                "inputs": workflow["inputs"]
-            }
-        }))
+        await self.runner_ws.send(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": workflow["id"],
+                    "method": "workflow/execute",
+                    "params": {
+                        "workflow_id": workflow["workflow_id"],
+                        "inputs": workflow["inputs"],
+                    },
+                }
+            )
+        )
         logger.info(f"Sent workflow {workflow['workflow_id']} (id={workflow['id']})")
 
     async def send_queued_workflows(self) -> None:

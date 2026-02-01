@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 class RunnerConnectionStatus(str, Enum):
     """Runner connection status."""
+
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
@@ -21,6 +22,7 @@ class RunnerConnectionStatus(str, Enum):
 
 class MCPStatus(str, Enum):
     """MCP availability status."""
+
     AVAILABLE = "available"
     UNAVAILABLE = "unavailable"
     UNKNOWN = "unknown"
@@ -29,10 +31,11 @@ class MCPStatus(str, Enum):
 @dataclass
 class RunnerConfig:
     """Bootstrap configuration for runner.
-    
+
     Minimal config needed to connect to Control Plane.
     Full MCP configs are pushed from CP after connection.
     """
+
     control_plane_url: str
     auth_token: str
     runner_name: str
@@ -45,6 +48,7 @@ class RunnerConfig:
 @dataclass
 class MCPAvailability:
     """MCP server availability status."""
+
     name: str
     status: MCPStatus
     tools: list[str] = field(default_factory=list)
@@ -55,6 +59,7 @@ class MCPAvailability:
 @dataclass
 class RunnerStatus:
     """Current runner status."""
+
     name: str
     connection_status: RunnerConnectionStatus
     available_mcps: list[MCPAvailability] = field(default_factory=list)
@@ -65,8 +70,10 @@ class RunnerStatus:
 
 # JSON-RPC 2.0 Message Types
 
+
 class JSONRPCRequest(BaseModel):
     """JSON-RPC 2.0 request message."""
+
     jsonrpc: str = "2.0"
     id: int | str
     method: str
@@ -79,6 +86,7 @@ class JSONRPCRequest(BaseModel):
 
 class JSONRPCResponse(BaseModel):
     """JSON-RPC 2.0 response message."""
+
     jsonrpc: str = "2.0"
     id: int | str | None
     result: Any | None = None
@@ -91,6 +99,7 @@ class JSONRPCResponse(BaseModel):
 
 class JSONRPCNotification(BaseModel):
     """JSON-RPC 2.0 notification (no id, no response expected)."""
+
     jsonrpc: str = "2.0"
     method: str
     params: dict[str, Any] = Field(default_factory=dict)
@@ -107,12 +116,13 @@ JSONRPCMessage = JSONRPCRequest | JSONRPCResponse | JSONRPCNotification
 # JSON-RPC Error Codes
 class JSONRPCErrorCode:
     """Standard JSON-RPC 2.0 error codes."""
+
     PARSE_ERROR = -32700
     INVALID_REQUEST = -32600
     METHOD_NOT_FOUND = -32601
     INVALID_PARAMS = -32602
     INTERNAL_ERROR = -32603
-    
+
     # Custom error codes for runner
     AUTH_FAILED = -32000
     RUNNER_NOT_FOUND = -32001
@@ -124,13 +134,14 @@ class JSONRPCErrorCode:
 # Message method constants
 class RunnerMethods:
     """JSON-RPC methods for runner communication."""
+
     # Runner → CP
     REGISTER = "runner/register"
     HEARTBEAT = "runner/heartbeat"
     AVAILABILITY = "runner/availability"
     TOOL_PROXY = "tool/proxy"
     WORKFLOW_RESULT = "workflow/result"
-    
+
     # CP → Runner
     CONFIG_PUSH = "config/push"
     WORKFLOW_EXECUTE = "workflow/execute"
@@ -140,6 +151,7 @@ class RunnerMethods:
 @dataclass
 class MCPConfig:
     """MCP server configuration pushed from CP."""
+
     name: str
     command: str = ""  # For stdio transport
     args: list[str] = field(default_factory=list)
@@ -150,4 +162,5 @@ class MCPConfig:
 @dataclass
 class RunnerMCPConfig:
     """Full MCP configuration for a runner, pushed from CP."""
+
     mcps: dict[str, MCPConfig] = field(default_factory=dict)

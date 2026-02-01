@@ -1,21 +1,20 @@
 """Unit tests for ploston_runner.types module."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ploston_runner.types import (
-    RunnerConfig,
-    RunnerStatus,
-    MCPAvailability,
-    MCPStatus,
-    RunnerConnectionStatus,
+    JSONRPCErrorCode,
+    JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
-    JSONRPCNotification,
-    JSONRPCErrorCode,
-    RunnerMethods,
+    MCPAvailability,
     MCPConfig,
+    MCPStatus,
+    RunnerConfig,
+    RunnerConnectionStatus,
     RunnerMCPConfig,
+    RunnerMethods,
+    RunnerStatus,
 )
 
 
@@ -29,7 +28,7 @@ class TestRunnerConfig:
             auth_token="test-token",
             runner_name="test-runner",
         )
-        
+
         assert config.control_plane_url == "wss://cp.example.com/runner"
         assert config.auth_token == "test-token"
         assert config.runner_name == "test-runner"
@@ -50,7 +49,7 @@ class TestRunnerConfig:
             heartbeat_interval=15.0,
             health_check_interval=45.0,
         )
-        
+
         assert config.reconnect_delay == 10.0
         assert config.max_reconnect_delay == 120.0
         assert config.heartbeat_interval == 15.0
@@ -62,14 +61,14 @@ class TestMCPAvailability:
 
     def test_create_available_mcp(self):
         """Test creating an available MCP status."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         avail = MCPAvailability(
             name="filesystem",
             status=MCPStatus.AVAILABLE,
             tools=["fs_read", "fs_write", "fs_list"],
             last_checked=now,
         )
-        
+
         assert avail.name == "filesystem"
         assert avail.status == MCPStatus.AVAILABLE
         assert len(avail.tools) == 3
@@ -83,7 +82,7 @@ class TestMCPAvailability:
             status=MCPStatus.UNAVAILABLE,
             error="Docker daemon not running",
         )
-        
+
         assert avail.name == "docker"
         assert avail.status == MCPStatus.UNAVAILABLE
         assert avail.tools == []
@@ -100,7 +99,7 @@ class TestRunnerStatus:
             connection_status=RunnerConnectionStatus.CONNECTED,
             uptime_seconds=3600.0,
         )
-        
+
         assert status.name == "my-runner"
         assert status.connection_status == RunnerConnectionStatus.CONNECTED
         assert status.uptime_seconds == 3600.0
@@ -118,12 +117,12 @@ class TestJSONRPCMessages:
             method="runner/register",
             params={"token": "test", "name": "runner1"},
         )
-        
+
         assert request.jsonrpc == "2.0"
         assert request.id == 1
         assert request.method == "runner/register"
         assert request.params == {"token": "test", "name": "runner1"}
-        
+
         # Test serialization
         json_str = request.model_dump_json()
         assert '"jsonrpc":"2.0"' in json_str
@@ -135,7 +134,7 @@ class TestJSONRPCMessages:
             id=1,
             result={"status": "ok"},
         )
-        
+
         assert response.jsonrpc == "2.0"
         assert response.id == 1
         assert response.result == {"status": "ok"}
@@ -150,7 +149,7 @@ class TestJSONRPCMessages:
                 "message": "Invalid token",
             },
         )
-        
+
         assert response.id == 1
         assert response.result is None
         assert response.error["code"] == -32000
@@ -162,7 +161,7 @@ class TestJSONRPCMessages:
             method="runner/heartbeat",
             params={"timestamp": 1234567890},
         )
-        
+
         assert notification.jsonrpc == "2.0"
         assert notification.method == "runner/heartbeat"
         assert notification.params == {"timestamp": 1234567890}
@@ -197,7 +196,7 @@ class TestMCPConfig:
             args=["-y", "@anthropic/mcp-server-filesystem"],
             env={"HOME": "/home/user"},
         )
-        
+
         assert config.name == "filesystem"
         assert config.command == "npx"
         assert config.args == ["-y", "@anthropic/mcp-server-filesystem"]
@@ -211,7 +210,7 @@ class TestMCPConfig:
             command="",
             url="http://localhost:8080/mcp",
         )
-        
+
         assert config.name == "remote-mcp"
         assert config.url == "http://localhost:8080/mcp"
 
@@ -228,12 +227,14 @@ class TestRunnerMCPConfig:
         """Test creating config with MCPs."""
         fs_config = MCPConfig(name="filesystem", command="npx")
         docker_config = MCPConfig(name="docker", command="docker-mcp")
-        
-        config = RunnerMCPConfig(mcps={
-            "filesystem": fs_config,
-            "docker": docker_config,
-        })
-        
+
+        config = RunnerMCPConfig(
+            mcps={
+                "filesystem": fs_config,
+                "docker": docker_config,
+            }
+        )
+
         assert len(config.mcps) == 2
         assert "filesystem" in config.mcps
         assert "docker" in config.mcps

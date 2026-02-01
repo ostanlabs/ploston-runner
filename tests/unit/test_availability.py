@@ -3,12 +3,13 @@
 Tests: UT-033 to UT-044 from LOCAL_RUNNER_TEST_SPEC.md
 """
 
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from ploston_runner.availability import AvailabilityReporter
-from ploston_runner.types import MCPConfig, MCPStatus, MCPAvailability, RunnerMCPConfig
+from ploston_runner.types import MCPAvailability, MCPConfig, MCPStatus
 
 
 class TestAvailabilityReporter:
@@ -18,7 +19,7 @@ class TestAvailabilityReporter:
         """Test AvailabilityReporter initialization."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         assert reporter._connection == connection
         assert reporter._health_check_interval == 30.0
         assert reporter.available_tools == []
@@ -28,37 +29,37 @@ class TestAvailabilityReporter:
         """Test AvailabilityReporter with custom health check interval."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection, health_check_interval=60.0)
-        
+
         assert reporter._health_check_interval == 60.0
 
     def test_available_tools_empty(self):
         """Test available_tools when no MCPs configured."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         assert reporter.available_tools == []
 
     def test_available_tools_with_mcps(self):
         """Test available_tools lists tools from available MCPs (UT-037)."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         # Simulate availability data
         reporter._availability = {
             "filesystem": MCPAvailability(
                 name="filesystem",
                 status=MCPStatus.AVAILABLE,
                 tools=["fs_read", "fs_write"],
-                last_checked=datetime.now(timezone.utc),
+                last_checked=datetime.now(UTC),
             ),
             "docker": MCPAvailability(
                 name="docker",
                 status=MCPStatus.AVAILABLE,
                 tools=["docker_run"],
-                last_checked=datetime.now(timezone.utc),
+                last_checked=datetime.now(UTC),
             ),
         }
-        
+
         tools = reporter.available_tools
         assert "fs_read" in tools
         assert "fs_write" in tools
@@ -68,22 +69,22 @@ class TestAvailabilityReporter:
         """Test unavailable_mcps lists unavailable MCPs (UT-038)."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         reporter._availability = {
             "filesystem": MCPAvailability(
                 name="filesystem",
                 status=MCPStatus.AVAILABLE,
                 tools=["fs_read"],
-                last_checked=datetime.now(timezone.utc),
+                last_checked=datetime.now(UTC),
             ),
             "slack": MCPAvailability(
                 name="slack",
                 status=MCPStatus.UNAVAILABLE,
                 error="Connection refused",
-                last_checked=datetime.now(timezone.utc),
+                last_checked=datetime.now(UTC),
             ),
         }
-        
+
         unavailable = reporter.unavailable_mcps
         assert "slack" in unavailable
         assert "filesystem" not in unavailable
@@ -92,16 +93,16 @@ class TestAvailabilityReporter:
         """Test is_tool_available method."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         reporter._availability = {
             "filesystem": MCPAvailability(
                 name="filesystem",
                 status=MCPStatus.AVAILABLE,
                 tools=["fs_read", "fs_write"],
-                last_checked=datetime.now(timezone.utc),
+                last_checked=datetime.now(UTC),
             ),
         }
-        
+
         assert reporter.is_tool_available("fs_read") is True
         assert reporter.is_tool_available("fs_write") is True
         assert reporter.is_tool_available("nonexistent") is False
@@ -126,16 +127,16 @@ class TestAvailabilityReporter:
         """Test converting stdio MCP config to server definition."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         config = MCPConfig(
             name="filesystem",
             command="npx",
             args=["-y", "@mcp/filesystem"],
             env={"NODE_ENV": "production"},
         )
-        
+
         server_def = reporter._mcp_config_to_server_def(config)
-        
+
         assert "npx" in server_def.command
         assert "@mcp/filesystem" in server_def.command
         assert server_def.transport == "stdio"
@@ -145,7 +146,7 @@ class TestAvailabilityReporter:
         """Test get_mcp_manager returns None when not initialized."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         assert reporter.get_mcp_manager() is None
 
     @pytest.mark.asyncio
@@ -153,10 +154,10 @@ class TestAvailabilityReporter:
         """Test stopping availability reporter."""
         connection = MagicMock()
         reporter = AvailabilityReporter(connection=connection)
-        
+
         # Should not raise even when not started
         await reporter.stop()
-        
+
         assert reporter._should_run is False
 
 
@@ -169,9 +170,9 @@ class TestMCPAvailability:
             name="filesystem",
             status=MCPStatus.AVAILABLE,
             tools=["fs_read", "fs_write"],
-            last_checked=datetime.now(timezone.utc),
+            last_checked=datetime.now(UTC),
         )
-        
+
         assert avail.name == "filesystem"
         assert avail.status == MCPStatus.AVAILABLE
         assert len(avail.tools) == 2
@@ -182,9 +183,9 @@ class TestMCPAvailability:
             name="slack",
             status=MCPStatus.UNAVAILABLE,
             error="Connection timeout",
-            last_checked=datetime.now(timezone.utc),
+            last_checked=datetime.now(UTC),
         )
-        
+
         assert avail.name == "slack"
         assert avail.status == MCPStatus.UNAVAILABLE
         assert avail.error == "Connection timeout"
