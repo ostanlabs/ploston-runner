@@ -5,13 +5,13 @@ Defines data models for runner configuration, status, and JSON-RPC messages.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class RunnerConnectionStatus(str, Enum):
+class RunnerConnectionStatus(StrEnum):
     """Runner connection status."""
 
     DISCONNECTED = "disconnected"
@@ -20,7 +20,7 @@ class RunnerConnectionStatus(str, Enum):
     RECONNECTING = "reconnecting"
 
 
-class MCPStatus(str, Enum):
+class MCPStatus(StrEnum):
     """MCP availability status."""
 
     AVAILABLE = "available"
